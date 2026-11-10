@@ -3,8 +3,8 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<title>會考自然 知識大挑戰</title>
-<meta name="description" content="把國中會考自然科必背考點做成計時競賽遊戲：極速賽、生存挑戰、單元特訓、雙人對決、錯題本與考點圖鑑。">
+<title>自然戰力覺醒｜國中會考自然知識挑戰遊戲</title>
+<meta name="description" content="自然戰力覺醒：解鎖知識，挑戰你的自然實力！國中會考自然科歷屆考點計時挑戰遊戲：極速賽、生存挑戰、單元特訓、雙人對決、錯題本與考點圖鑑。">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700;900&display=swap" rel="stylesheet">
@@ -180,6 +180,9 @@ table.lb{width:100%;border-collapse:collapse;background:var(--panel);border-radi
 .feedback{display:flex;gap:10px;align-items:center}
 .feedback .fm{width:64px;height:64px;object-fit:contain;flex:none}
 .result .trophy{width:140px;height:140px;object-fit:contain;display:block;margin:0 auto -6px;animation:bob 2.4s ease-in-out infinite}
+.hero .slogan{color:var(--ink);font-size:clamp(15px,2.4vw,18px)}
+.hero .slogan b{color:var(--gold);font-size:clamp(18px,3vw,24px);font-weight:900;letter-spacing:.03em}
+.cta{text-align:center;font-weight:900;font-size:clamp(17px,2.8vw,22px);color:var(--gold);margin:18px 0 4px;text-shadow:0 3px 0 rgba(0,0,0,.35)}
 .foot{color:var(--mute);font-size:13px;text-align:center;margin-top:24px}
 .foot a{color:var(--mute)}
 @media (max-width:560px){
@@ -262,9 +265,9 @@ function home(){clearTimers();document.body.classList.remove("noscroll");
   app.innerHTML=`
   <div class="hero">
     ${IMG.has("hero")?`<div class="banner" style="--heroimg:url('img/hero.webp')">
-      <span class="badge">國中會考・自然科</span><h1>會考自然 知識大挑戰</h1>${artTag("mascot_think","mascot")}</div>`
-    :`${artTag("mascot_think","mascot")}<span class="badge">國中會考・自然科</span><h1>會考自然 知識大挑戰</h1>`}
-    <p>${total} 個${FILTERED?" 103～115 年會考考過的":""}必背考點，邊玩邊記，越錯的題目越常出現</p>
+      <span class="badge">國中會考自然｜知識挑戰遊戲</span><h1>自然戰力覺醒</h1>${artTag("mascot_think","mascot")}</div>`
+    :`${artTag("mascot_think","mascot")}<span class="badge">國中會考自然｜知識挑戰遊戲</span><h1>自然戰力覺醒</h1>`}
+    <p class="slogan"><b>解鎖知識，挑戰你的自然實力！</b><br>生物、理化、地科，學過的知識真的都會了嗎？</p>
     <div class="stats"><span class="stat"><b>${mast}</b>/ ${total} 已熟練</span><span class="stat"><b>${BOOK.size}</b>錯題待複習</span><span class="stat"><b>${Object.keys(S).length}</b>題已挑戰</span></div>
   </div>
   <div class="namebox">玩家名稱 <input id="pname" maxlength="12" placeholder="輸入暱稱" value="${esc(PREF.name||"")}"> <button class="iconbtn" id="snd" title="音效">${PREF.sound?"🔊":"🔇"}</button></div>
@@ -283,6 +286,7 @@ function home(){clearTimers();document.body.classList.remove("noscroll");
       ${Object.keys(UNITS).map(u=>`<button class="unit ${PREF.units.includes(u)?"on":""}" data-u="${u}"><img src="${ART(u)}" alt="" onerror="this.style.visibility='hidden'"><span style="flex:1">${UNITS[u]}<div class="bar"><i style="width:${unitProgress(u)}%"></i></div></span></button>`).join("")}
     </div>
   </div>
+  <div class="cta">⚔️ 準備迎接挑戰，看看你的自然戰力有多強！</div>
   <div class="modes">
     ${modeCard("speed","m1","⚡","極速 60 秒","60 秒內答越多越好，連對有加成，答錯扣 3 秒")}
     ${modeCard("survive","m2","❤️","生存挑戰","三條命，每題限時越來越短，看你撐幾題")}
