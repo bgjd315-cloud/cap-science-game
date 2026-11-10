@@ -51,8 +51,8 @@
 - 等 GitHub Pages 建置完成（`gh api repos/bgjd315-cloud/cap-science-game/pages/builds/latest`），打開網址確認。
 
 ### 6. 更新兩個入口頁的介紹文字（Artifact 工具，先 read 再 publish）
-- 會考練功坊 https://claude.ai/artifact/7ZTW9u8xWLTR1f2X2Jb8ds ：「第 1 關 闖關遊戲」裡「自然戰力覺醒」那張卡的 desc。
-- 佳慧老師的網站總覽 https://claude.ai/artifact/EtpwShg6DGoTnEd4mNBUUr ：「國中生 › 遊戲化複習」裡「自然戰力覺醒」那張卡的 desc。
+- 會考練功坊 https://claude.ai/artifact/7ZTW9u8xWLTR1f2X2Jb8ds ：「第 1 關 闖關遊戲」裡「自然戰力覺醒・南一版」那張卡（不要動「・康軒版」那張，康軒版有自己的排程）的 desc。
+- 佳慧老師的網站總覽 https://claude.ai/artifact/EtpwShg6DGoTnEd4mNBUUr ：「國中生 › 遊戲化複習」裡「自然戰力覺醒・南一版」那張卡（不要動「・康軒版」那張，康軒版有自己的排程）的 desc。
 - 只改那一張卡 desc 裡的題數與年份範圍（例如「1302 個 103–115 年」→ 新數字），其他內容一字不動。用 read 的 `path: "index.html"` 下載頁面檔，取 `<body>` 與 `</body>` 之間的內容修改後 publish 回同一個 url（不要連外層 `<!doctype html><html><head>…` 一起送）。
 
 ## 回報（繁體中文）
