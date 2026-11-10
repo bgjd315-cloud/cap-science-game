@@ -25,22 +25,27 @@ def chroma(img):
     box = im.getchannel("A").point(lambda v: 255 if v > 20 else 0).getbbox()
     return im.crop(box) if box else im
 
+def process_one(path):
+    """處理單一原圖，回傳輸出檔名與尺寸"""
+    stem = os.path.splitext(os.path.basename(path))[0].lower()
+    im = Image.open(path)
+    if stem == "hero":
+        im = im.convert("RGB")
+        if im.width > 1600: im = im.resize((1600, round(im.height * 1600 / im.width)), Image.LANCZOS)
+        im.save(os.path.join(DST, "hero.webp"), "WEBP", quality=80)
+    else:
+        im = chroma(im)
+        im.thumbnail((512, 512), Image.LANCZOS)
+        im.save(os.path.join(DST, stem + ".webp"), "WEBP", quality=85)
+    return stem + ".webp", im.size
+
 def main():
     names = sorted(f for f in os.listdir(SRC) if f.lower().endswith((".png", ".jpg", ".jpeg", ".webp")))
     if not names:
         print("img_raw/ 是空的"); return
     for f in names:
-        stem = os.path.splitext(f)[0].lower()
-        im = Image.open(os.path.join(SRC, f))
-        if stem == "hero":
-            im = im.convert("RGB")
-            if im.width > 1600: im = im.resize((1600, round(im.height * 1600 / im.width)), Image.LANCZOS)
-            im.save(os.path.join(DST, "hero.webp"), "WEBP", quality=80)
-        else:
-            im = chroma(im)
-            im.thumbnail((512, 512), Image.LANCZOS)
-            im.save(os.path.join(DST, stem + ".webp"), "WEBP", quality=85)
-        print("ok", stem, im.size)
+        out, size = process_one(os.path.join(SRC, f))
+        print("ok", out, size)
 
 if __name__ == "__main__":
     main()
