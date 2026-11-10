@@ -131,6 +131,8 @@ h1,h2,h3{margin:0;line-height:1.25}
 .item .aa{color:var(--ok);font-weight:700}
 .item .ee{color:var(--mute);font-size:14px}
 .item .yourA{color:var(--bad);font-size:14px}
+.confetti{position:fixed;top:-12px;width:9px;height:14px;border-radius:2px;z-index:70;pointer-events:none;animation:fall linear forwards}
+@keyframes fall{to{top:105vh;transform:rotate(720deg) translateX(40px)}}
 .newrec{display:inline-block;background:var(--bad);border-radius:999px;padding:2px 12px;font-weight:900;animation:pop2 1s infinite alternate}
 @keyframes pop2{to{transform:scale(1.08)}}
 
@@ -235,10 +237,59 @@ function record(q,ok){const s=S[q.id]||(S[q.id]={c:0,w:0,s:0});
 const mastered=q=>{const s=S[q.id];return s&&s.s>=2};
 
 /* ========= 音效 ========= */
-let AC;function beep(type){if(!PREF.sound)return;try{AC=AC||new (window.AudioContext||window.webkitAudioContext)();
-  const seq={ok:[[660,.07],[990,.1]],bad:[[220,.18]],tick:[[880,.04]],end:[[523,.1],[659,.1],[784,.18]],go:[[440,.08]]}[type];
-  let t=AC.currentTime;for(const [f,d] of seq){const o=AC.createOscillator(),g=AC.createGain();o.type=type==="bad"?"sawtooth":"triangle";
-  o.frequency.value=f;g.gain.setValueAtTime(.12,t);g.gain.exponentialRampToValueAtTime(.001,t+d);o.connect(g);g.connect(AC.destination);o.start(t);o.stop(t+d);t+=d}}catch(e){}}
+/* 全部用 Web Audio 即時合成，不需要音檔。SFX＝音效、MUS＝背景音樂，各自有開關 */
+if(PREF.music===undefined)PREF.music=true;
+let AC,SFX,MUS,NOISE;
+function ac(){if(!AC){AC=new (window.AudioContext||window.webkitAudioContext)();
+    SFX=AC.createGain();SFX.gain.value=.9;SFX.connect(AC.destination);
+    MUS=AC.createGain();MUS.gain.value=.32;MUS.connect(AC.destination);
+    NOISE=AC.createBuffer(1,AC.sampleRate,AC.sampleRate);const d=NOISE.getChannelData(0);for(let i=0;i<d.length;i++)d[i]=Math.random()*2-1}
+  if(AC.state==="suspended")AC.resume();return AC}
+function tone(f,t,d,o={}){const os=AC.createOscillator(),g=AC.createGain();os.type=o.type||"triangle";os.frequency.setValueAtTime(f,t);
+  if(o.slide)os.frequency.exponentialRampToValueAtTime(o.slide,t+d);
+  const v=o.vol??.12;g.gain.setValueAtTime(.0001,t);g.gain.exponentialRampToValueAtTime(v,t+.006);g.gain.exponentialRampToValueAtTime(.0001,t+d);
+  os.connect(g);g.connect(o.dest||SFX);os.start(t);os.stop(t+d+.02)}
+function noise(t,d,o={}){const s=AC.createBufferSource(),f=AC.createBiquadFilter(),g=AC.createGain();s.buffer=NOISE;
+  f.type=o.ft||"highpass";f.frequency.value=o.fq||1000;if(o.Q)f.Q.value=o.Q;const v=o.vol??.08,a=o.att||.004;
+  g.gain.setValueAtTime(.0001,t);g.gain.exponentialRampToValueAtTime(v,t+a);g.gain.exponentialRampToValueAtTime(.0001,t+d);
+  s.connect(f);f.connect(g);g.connect(o.dest||SFX);s.start(t,Math.random()*.5);s.stop(t+d+.02)}
+/* C 大調音階：連對越多，答對音越高 */
+const SCALE=[0,2,4,5,7,9,11],deg=n=>523.25*Math.pow(2,(12*Math.floor(n/7)+SCALE[((n%7)+7)%7])/12);
+function beep(type,arg){if(!PREF.sound)return;try{ac();const t=AC.currentTime+.01;
+  if(type==="ok"){const s=Math.min((arg||1)-1,14);tone(deg(s),t,.09);tone(deg(s+2),t+.07,.16);if(s>=3)tone(deg(s+4),t+.14,.2,{vol:.09});if(s>=7)noise(t+.14,.25,{fq:6000,vol:.03})}
+  else if(type==="bad"){tone(220,t,.26,{type:"sawtooth",vol:.07,slide:150});tone(208,t+.04,.24,{type:"square",vol:.03,slide:140})}
+  else if(type==="tick")tone(880,t,.05);
+  else if(type==="go"){tone(523,t,.08);tone(784,t+.07,.18)}
+  else if(type==="warn")tone(1568,t,.05,{type:"square",vol:.035});
+  else if(type==="end")[523,659,784,1047].forEach((f,i)=>tone(f,t+i*.1,.2));
+  else if(type==="cheer"){ // 號角＋觀眾歡呼＋掌聲
+    [392,523,659,784].forEach((f,i)=>tone(f,t+i*.09,.16,{type:"square",vol:.06}));
+    [523,659,784,1047].forEach(f=>tone(f,t+.38,1.1,{type:"triangle",vol:.08}));
+    tone(1047,t+.38,1.1,{type:"square",vol:.03});
+    for(let k=0;k<5;k++)noise(t+.3+k*.06,1.8+Math.random()*.6,{ft:"bandpass",fq:900+k*350,Q:.8,vol:.07,att:.25});
+    for(let k=0;k<26;k++)noise(t+.35+Math.random()*1.6,.04,{fq:1800,vol:.12})}
+}catch(e){}}
+
+/* 背景音樂：16 拍一小節，C–Am–F–G 循環；hot＝最後衝刺（加速、加打擊） */
+const BGM={on:false,bpm:120,hot:false,step:0,next:0,timer:null};
+const CHORDS=[[0,4,7],[-3,0,4],[-7,-3,0],[-5,-1,2]];
+const st=s=>261.63*Math.pow(2,s/12);
+function bgmStep(i,t){const bar=Math.floor(i/16)%4,s=i%16,ch=CHORDS[bar],dur=60/BGM.bpm/4,o={dest:MUS};
+  if(s%8===0)tone(110,t,.12,{type:"sine",vol:.5,slide:45,dest:MUS});                       // 大鼓
+  if(BGM.hot&&s%8===4)noise(t,.09,{fq:1500,vol:.18,dest:MUS});                              // 衝刺時的小鼓
+  if(s%4===0||s%8===6)tone(st(ch[0]-12),t,dur*2.2,{type:"square",vol:.06,dest:MUS});        // 貝斯
+  if(BGM.hot?true:s%2===0)noise(t,.03,{fq:7000,vol:BGM.hot?.05:.03,dest:MUS});               // 鈸
+  if(BGM.hot||s%2===0){const n=ch[(s>>(BGM.hot?0:1))%3]+(s>=8?12:0);tone(st(n+12),t,dur*1.6,{vol:.05,dest:MUS})} // 琶音
+  if(BGM.hot&&s%4===2)tone(st(ch[2]+24),t,dur,{type:"square",vol:.025,dest:MUS})}
+function bgmTick(){if(!BGM.on)return;while(BGM.next<AC.currentTime+.12){bgmStep(BGM.step,BGM.next);BGM.next+=60/BGM.bpm/4;BGM.step=(BGM.step+1)%64}}
+function bgmStart(){if(!PREF.music||BGM.on)return;try{ac();BGM.on=true;BGM.step=0;BGM.next=AC.currentTime+.06;BGM.timer=setInterval(bgmTick,25)}catch(e){}}
+function bgmStop(){BGM.on=false;clearInterval(BGM.timer);BGM.timer=null;BGM.hot=false;BGM.bpm=120}
+function bgmHot(x){if(BGM.hot===x)return;BGM.hot=x;BGM.bpm=x?168:120}
+document.addEventListener("visibilitychange",()=>{if(!AC)return;if(document.hidden)AC.suspend();else AC.resume()});
+function confetti(){const c=["#ffd23f","#ff5a5f","#3ddc84","#4dabf7","#b197fc","#fff"];
+  for(let i=0;i<70;i++){const d=document.createElement("i");d.className="confetti";
+    d.style.cssText=`left:${Math.random()*100}vw;background:${c[i%c.length]};animation-delay:${Math.random()*.6}s;animation-duration:${1.6+Math.random()*1.4}s;transform:rotate(${Math.random()*360}deg)`;
+    document.body.appendChild(d);setTimeout(()=>d.remove(),3800)}}
 
 /* ========= 工具 ========= */
 const $=s=>document.querySelector(s);
@@ -259,7 +310,7 @@ function tagHTML(q){const sj=SUBJ[subjOf(q.u)];return `<span class="tag" style="
 function unitProgress(u){const l=Q.filter(q=>q.u===u);return Math.round(l.filter(mastered).length/l.length*100)}
 
 /* ========= 首頁 ========= */
-function home(){clearTimers();document.body.classList.remove("noscroll");
+function home(){clearTimers();bgmStop();document.body.classList.remove("noscroll");
   const total=Q.length,mast=Q.filter(mastered).length;
   const subjChip=(k,n)=>`<button class="chip s-${k} ${PREF.subj===k&&!PREF.units.length?"on":""}" data-subj="${k}">${IMG.has("subj_"+k)?artTag("subj_"+k,"sic")+n.replace(/^\S+\s/,""):n}</button>`;
   const modeCard=(m,cls,ic,title,desc,extra="")=>`<button class="mode ${cls} ${IMG.has("mode_"+m)?"hasart":""}" data-go="${m}"><div class="ic">${ic}</div><h3>${title}${extra}</h3><p>${desc}</p>${artTag("mode_"+m,"mart")}</button>`;
@@ -271,7 +322,7 @@ function home(){clearTimers();document.body.classList.remove("noscroll");
     <p class="slogan"><b>解鎖知識，挑戰你的自然實力！</b><br>生物、理化、地科，學過的知識真的都會了嗎？</p>
     <div class="stats"><span class="stat"><b>${mast}</b>/ ${total} 已熟練</span><span class="stat"><b>${BOOK.size}</b>錯題待複習</span><span class="stat"><b>${Object.keys(S).length}</b>題已挑戰</span></div>
   </div>
-  <div class="namebox">玩家名稱 <input id="pname" maxlength="12" placeholder="輸入暱稱" value="${esc(PREF.name||"")}"> <button class="iconbtn" id="snd" title="音效">${PREF.sound?"🔊":"🔇"}</button></div>
+  <div class="namebox">玩家名稱 <input id="pname" maxlength="12" placeholder="輸入暱稱" value="${esc(PREF.name||"")}"> <button class="iconbtn" id="snd" title="音效開關">${PREF.sound?"🔊":"🔇"}</button> <button class="iconbtn" id="mus" title="背景音樂開關" style="${PREF.music?"":"opacity:.45"}">🎵</button></div>
   <div class="filter">
     <div class="row">
       <button class="chip ${PREF.subj==="all"&&!PREF.units.length?"on":""}" data-subj="all">全部</button>
@@ -299,7 +350,8 @@ function home(){clearTimers();document.body.classList.remove("noscroll");
   </div>
   <div class="foot">考點整理自 <a href="https://bgjd315-cloud.github.io/cap-science-map/" target="_blank" rel="noopener">會考自然考點地圖</a> 與南一版自然七上～九下課本，<br>並逐題比對 ${YR} 年歷屆國中教育會考自然科試題，只保留會考考過的考點・紀錄只存在這台裝置</div>`;
   $("#pname").oninput=e=>{PREF.name=e.target.value.trim();save()};
-  $("#snd").onclick=()=>{PREF.sound=!PREF.sound;save();home()};
+  $("#snd").onclick=()=>{PREF.sound=!PREF.sound;save();home();if(PREF.sound)beep("tick")};
+  $("#mus").onclick=()=>{PREF.music=!PREF.music;save();home()};
   app.querySelectorAll("[data-subj]").forEach(b=>b.onclick=()=>{PREF.subj=b.dataset.subj;PREF.units=[];save();home()});
   app.querySelectorAll("[data-vol]").forEach(b=>b.onclick=()=>{const v=b.dataset.vol;PREF.vols=PREF.vols||[];
     if(!v)PREF.vols=[];else{const i=PREF.vols.indexOf(v);if(i>=0)PREF.vols.splice(i,1);else PREF.vols.push(v)}save();home()});
@@ -320,13 +372,15 @@ function startGame(mode){
   if(!list.length){alert("出題範圍沒有題目");return}
   G={mode,deck:makeDeck(list),i:0,score:0,combo:0,maxCombo:0,right:0,wrong:0,missed:[],answered:0,
      time:60,lives:3,limit:12,qTime:0,locked:false,total:mode==="practice"||mode==="review"?Math.min(15,list.length):Infinity};
-  countdown(()=>{if(mode==="speed"){G.end=Date.now()+60000;timers.push(setInterval(speedTick,100))}nextQ()});
+  countdown(()=>{if(mode==="speed"){G.end=Date.now()+60000;timers.push(setInterval(speedTick,100))}
+    if(mode==="speed"||mode==="survive")bgmStart();nextQ()});
 }
 function countdown(cb){const d=document.createElement("div");d.className="countdown";document.body.appendChild(d);let n=3;
   const step=()=>{if(n===0){d.textContent="GO!";beep("go");setTimeout(()=>{d.remove();cb()},400);return}d.textContent=n;beep("tick");n--;setTimeout(step,600)};step()}
 function speedTick(){const left=Math.max(0,G.end-Date.now());G.time=left/1000;const t=$("#tbar");
   if(t){t.style.width=(left/600)+"%";t.parentElement.classList.toggle("low",left<10000)}
   const tb=$("#tval");if(tb)tb.textContent=Math.ceil(G.time);
+  if(left<10000&&left>0){bgmHot(true);const sec=Math.ceil(left/1000);if(sec!==G.lastSec){G.lastSec=sec;beep("warn")}}else if(left>=10000)bgmHot(false);
   if(left<=0)finish()}
 function hudHTML(){const m=G.mode;let left="";
   if(m==="speed")left=`<div class="box"><small>時間</small><b id="tval">${Math.ceil(G.time)}</b></div>`;
@@ -359,10 +413,10 @@ function answer(i){if(G.locked)return;G.locked=true;if(G.qTimer){clearInterval(G
   const btns=app.querySelectorAll(".opt");btns.forEach((b,j)=>{const o=G.opts[j];if(o===q.a)b.classList.add("ok");else if(j===i)b.classList.add("no");else b.classList.add("dim")});
   if(ok){G.right++;G.combo++;G.maxCombo=Math.max(G.maxCombo,G.combo);const bonus=Math.min(G.combo-1,5)*20;let pts=100+bonus;
     if(G.mode==="survive")pts+=Math.round(Math.max(0,G.qEnd-Date.now())/100);
-    G.score+=pts;beep("ok");popText(G.combo>2?`+${pts} 🔥${G.combo}`:`+${pts}`,"var(--gold)")}
+    G.score+=pts;beep("ok",G.combo);popText(G.combo>2?`+${pts} 🔥${G.combo}`:`+${pts}`,"var(--gold)")}
   else{G.wrong++;G.combo=0;G.missed.push({q,picked});beep("bad");$("#qc").classList.add("shake");
     if(G.mode==="speed"){G.end-=3000;popText("−3 秒","var(--bad)")}
-    if(G.mode==="survive"){G.lives--;popText(i<0?"時間到！":"💔","var(--bad)")}}
+    if(G.mode==="survive"){G.lives--;popText(i<0?"時間到！":"💔","var(--bad)");if(G.lives===1)bgmHot(true)}}
   const ansTxt=q.tf?(q.a==="O"?"⭕ 正確":"❌ 錯誤"):q.a;
   const fb=$("#fb");
   const showExp=G.mode==="practice"||G.mode==="review"||!ok;
@@ -382,14 +436,15 @@ document.addEventListener("keydown",e=>{
   let k=e.key.toLowerCase();if(G.cur&&G.cur.tf){if(k==="o")k="1";if(k==="x")k="2"}
   const n=parseInt(k,10);if(n>=1&&n<=G.opts.length)answer(n-1)});
 
-function finish(){clearTimers();if(!G||G.done)return;G.done=true;beep("end");
+function finish(){clearTimers();bgmStop();if(!G||G.done)return;G.done=true;let isRec=false;
   const acc=G.answered?Math.round(G.right/G.answered*100):0;
   let stars="";if(G.mode==="practice"||G.mode==="review"){const n=acc>=90?3:acc>=70?2:acc>=40?1:0;stars=`<div class="stars">${"⭐".repeat(n)}${"☆".repeat(3-n)}</div>`}
   let rec="";const name=PREF.name||"無名英雄";
   if(G.mode==="speed"||G.mode==="survive"){const key=G.mode+"|"+(PREF.units.length?"自選":PREF.subj);
     const arr=LB[key]||(LB[key]=[]);const best=arr.length?arr[0].s:0;
     arr.push({n:name,s:G.score,r:G.right,a:acc,d:new Date().toLocaleDateString("zh-TW")});arr.sort((a,b)=>b.s-a.s);LB[key]=arr.slice(0,10);save();
-    if(G.score>best&&G.score>0)rec=`<div><span class="newrec">🎉 新紀錄！</span></div>`}
+    if(G.score>best&&G.score>0){isRec=true;rec=`<div><span class="newrec">🎉 新紀錄！</span></div>`}}
+  if(isRec){beep("cheer");confetti()}else beep("end");
   const scopeName=PREF.units.length?`自選 ${PREF.units.length} 單元`:(PREF.subj==="all"?"全部範圍":SUBJ[PREF.subj].n);
   app.innerHTML=`<div class="top"><button class="back" id="hm">🏠 首頁</button><div class="ttl">${MODES[G.mode]}・${G.mode==="review"?"錯題本":scopeName}</div></div>
   <div class="result">${artTag("mascot_trophy","trophy")}${rec}${stars}<div class="big">${G.score}</div><div style="color:var(--mute)">${esc(name)} 的得分</div>
@@ -433,7 +488,7 @@ function duelStart(){const list=pool();if(!list.length)return;
   el.innerHTML=half(0)+`<div class="mid" style="position:relative"><span>先拿 ${DUEL.win} 分獲勝</span><span id="dround"></span><button class="quit" id="dquit">離開</button></div>`+half(1);
   document.body.appendChild(el);document.body.style.overflow="hidden";
   $("#dquit").onclick=()=>duelEnd(true);
-  countdown(duelNext)}
+  countdown(()=>{bgmStart();duelNext()})}
 function duelNext(){if(!DUEL)return;clearTimers();
   if(DUEL.i>=DUEL.deck.length)DUEL.deck=DUEL.deck.concat(makeDeck(DUEL.deck));
   const q=DUEL.deck[DUEL.i++];DUEL.q=q;DUEL.opts=optionsOf(q);DUEL.lock=[false,false];DUEL.open=true;
@@ -444,7 +499,7 @@ function duelNext(){if(!DUEL)return;clearTimers();
     o.querySelectorAll(".opt").forEach(b=>b.onclick=()=>duelAnswer(p,+b.dataset.i));$("#dm"+p).textContent=""}
   timers.push(setTimeout(()=>duelReveal(null),15000))}
 function duelAnswer(p,i){if(!DUEL||!DUEL.open||DUEL.lock[p]||i>=DUEL.opts.length)return;const q=DUEL.q;
-  if(DUEL.opts[i]===q.a){DUEL.sc[p]++;$("#sc"+p).textContent=DUEL.sc[p];beep("ok");record(q,true);save();duelReveal(p)}
+  if(DUEL.opts[i]===q.a){DUEL.sc[p]++;$("#sc"+p).textContent=DUEL.sc[p];beep("ok",DUEL.sc[p]);if(Math.max(...DUEL.sc)>=DUEL.win-2)bgmHot(true);record(q,true);save();duelReveal(p)}
   else{DUEL.lock[p]=true;beep("bad");$("#do"+p).querySelectorAll(".opt")[i].classList.add("no");$("#do"+p).classList.add("lock");$("#dm"+p).textContent="答錯了，這題鎖住！";
     if(DUEL.lock[0]&&DUEL.lock[1]){record(q,false);save();duelReveal(null)}}}
 function duelReveal(winner){if(!DUEL||!DUEL.open)return;DUEL.open=false;clearTimers();const q=DUEL.q;
@@ -452,8 +507,8 @@ function duelReveal(winner){if(!DUEL||!DUEL.open)return;DUEL.open=false;clearTim
     $("#dm"+p).textContent=(winner===p?"🎉 搶答成功！ ":winner===null?"沒人答對 ":"對手先答對 ")+"📌 "+q.e}
   if(DUEL.sc[0]>=DUEL.win||DUEL.sc[1]>=DUEL.win){timers.push(setTimeout(()=>duelEnd(false),2600));return}
   timers.push(setTimeout(duelNext,3200))}
-function duelEnd(quit){clearTimers();const d=DUEL;DUEL=null;const el=$("#duel");if(el)el.remove();document.body.style.overflow="";
-  if(quit||!d){home();return}beep("end");const w=d.sc[0]>d.sc[1]?"🔴 玩家 1":"🔵 玩家 2";
+function duelEnd(quit){clearTimers();bgmStop();const d=DUEL;DUEL=null;const el=$("#duel");if(el)el.remove();document.body.style.overflow="";
+  if(quit||!d){home();return}beep("cheer");confetti();const w=d.sc[0]>d.sc[1]?"🔴 玩家 1":"🔵 玩家 2";
   app.innerHTML=`<div class="top"><button class="back" id="hm">🏠 首頁</button><div class="ttl">⚔️ 雙人對決</div></div>
   <div class="result">${artTag("mascot_trophy","trophy")}<div class="big">${w} 獲勝！</div><div class="rgrid" style="grid-template-columns:1fr 1fr"><div><small>🔴 玩家 1</small><b>${d.sc[0]}</b></div><div><small>🔵 玩家 2</small><b>${d.sc[1]}</b></div></div>
   <div class="btnrow"><button class="btn gold" id="again">🔁 再戰一回</button><button class="btn" id="hm2">回首頁</button></div></div>`;
