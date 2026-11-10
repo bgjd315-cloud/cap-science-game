@@ -12,4 +12,5 @@
 - `src/bank*.js`：題庫原檔；`src/exam_match.json`：歷屆會考比對結果（keep／考過年份）
 - `src/template.html`：遊戲本體
 - `node build.js`：組合出 `index.html`
+- 每年加入新一屆會考：照 `tools/UPDATE.md`（排程每年 6/15 自動執行）；歷屆考點索引在 `src/exam_index/`
 - 圖片：Gemini 畫好的圖放 `img_raw/`（檔名見 `Gemini生圖提示詞.md`），執行 `python tools/process_images.py` 去背縮圖到 `img/`，再 `node build.js`

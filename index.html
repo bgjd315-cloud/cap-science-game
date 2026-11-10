@@ -1521,6 +1521,7 @@ const art=n=>IMG.has(n)?`img/${n}.webp`:"";
 const artTag=(n,cls)=>IMG.has(n)?`<img class="${cls}" src="img/${n}.webp" alt="" onerror="this.remove()">`:"";
 const yrsTxt=q=>q.yrs.length?`📝 ${q.yrs.join("、")} 年會考考過`:"";
 const FILTERED=Q.some(q=>q.yrs.length);
+const ALLY=Q.flatMap(q=>q.yrs).map(Number);const YR=ALLY.length?`${Math.min(...ALLY)}～${Math.max(...ALLY)}`:"";
 Q.forEach(q=>q.vol=q.src==="會考考點"?"會考":q.src.replace(/^南一(\S+).*$/,"$1"));
 const VOLS=["會考","7上","7下","8上","8下","9上","9下"].filter(v=>Q.some(q=>q.vol===v));
 const VOLNAME=v=>v==="會考"?"會考考點地圖":"南一 "+v;
@@ -1601,7 +1602,7 @@ function home(){clearTimers();document.body.classList.remove("noscroll");
     ${modeCard("board","m6","🏆","排行榜","這台裝置上的最高分紀錄")}
     ${modeCard("dex","m7","📖","考點圖鑑","依單元瀏覽全部必背考點，可搜尋")}
   </div>
-  <div class="foot">考點整理自 <a href="https://bgjd315-cloud.github.io/cap-science-map/" target="_blank" rel="noopener">會考自然考點地圖</a> 與南一版自然七上～九下課本，<br>並逐題比對 103～115 年歷屆國中教育會考自然科試題，只保留會考考過的考點・紀錄只存在這台裝置</div>`;
+  <div class="foot">考點整理自 <a href="https://bgjd315-cloud.github.io/cap-science-map/" target="_blank" rel="noopener">會考自然考點地圖</a> 與南一版自然七上～九下課本，<br>並逐題比對 ${YR} 年歷屆國中教育會考自然科試題，只保留會考考過的考點・紀錄只存在這台裝置</div>`;
   $("#pname").oninput=e=>{PREF.name=e.target.value.trim();save()};
   $("#snd").onclick=()=>{PREF.sound=!PREF.sound;save();home()};
   app.querySelectorAll("[data-subj]").forEach(b=>b.onclick=()=>{PREF.subj=b.dataset.subj;PREF.units=[];save();home()});
